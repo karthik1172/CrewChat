@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct CrewChatApp: App {
@@ -13,5 +14,6 @@ struct CrewChatApp: App {
         WindowGroup {
             HomeView()
         }
+        .modelContainer(for: ChatMessage.self)
     }
 }
