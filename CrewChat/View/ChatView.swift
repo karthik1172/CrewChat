@@ -68,6 +68,20 @@ struct ChatView: View {
                 selectedImage = nil
             }
         }
+        .onChange(of:showFullScreenImage.0 ) { oldValue, newValue in
+            print("new value", newValue)
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(image: $selectedImage, sourceType: .photoLibrary)
+        }
+        .sheet(isPresented: $showCamera) {
+            ImagePicker(image: $selectedImage, sourceType: .camera)
+        }
+        .fullScreenCover(isPresented: $showFullScreenImage.0) {
+            if let imagePath = showFullScreenImage.1 {
+                FullScreenImageView(imagePath: imagePath, isPresented: $showFullScreenImage.0)
+            }
+        }
     }
     
     private func scrollToBottom(proxy: ScrollViewProxy) {
