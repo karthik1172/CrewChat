@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-//import UIKit
 
 struct MessageBubbleView: View {
     let chatMessage: ChatMessage
