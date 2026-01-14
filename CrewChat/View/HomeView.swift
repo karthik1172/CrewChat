@@ -9,13 +9,6 @@ import SwiftUI
 
 struct HomeView: View {
     
-    private let welcomeMessages = [
-        "Your AI-powered conversation helper",
-        "Ask anything. Build everything.",
-        "Smart chats. Real answers."
-    ]
-    
-    //@State private var selectedMessage = ""
     @State private var showSubtitle = false
     
     var body: some View {
