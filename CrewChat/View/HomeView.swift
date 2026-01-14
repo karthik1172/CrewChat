@@ -10,18 +10,28 @@ import SwiftUI
 struct HomeView: View {
     
     @State private var showSubtitle = false
+    @State private var didShowTypingAnimation = false
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 Spacer()
                 
-                TypingText(
-                    text: "Welcome to Crew!",
-                    typingSpeed: 0.08
-                )
-                .font(.largeTitle)
-                .fontWeight(.bold)
+                if didShowTypingAnimation {
+                    Text("Welcome to Crew!")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                } else {
+                    TypingText(
+                        text: "Welcome to Crew!",
+                        typingSpeed: 0.08,
+                        onFinished: {
+                            didShowTypingAnimation = true
+                        }
+                    )
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                }
                 
                 Spacer()
                     .frame(height: 10)
