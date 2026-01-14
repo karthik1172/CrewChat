@@ -39,23 +39,6 @@ struct MessageBubbleView: View {
                                 Label("Copy", systemImage: "doc.on.doc")
                             }
                         }
-
-                        // Copied toast
-                        .overlay(
-                            Group {
-                                if showCopied {
-                                    Text("Copied")
-                                        .font(.caption2)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.black.opacity(0.75))
-                                        .foregroundColor(.white)
-                                        .cornerRadius(8)
-                                        .transition(.opacity)
-                                }
-                            },
-                            alignment: .top
-                        )
                         .onChange(of: showCopied) { _, newValue in
                             if newValue {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
