@@ -1,16 +1,10 @@
-//
-//  ChatView.swift
-//  CrewChat
-//
-//  Created by Karthik Rashinkar on 13/01/26.
-//
-
 import SwiftUI
 import SwiftData
 
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \ChatMessage.timestamp, order: .forward) private var messages: [ChatMessage]
+    @Query(sort: \ChatMessage.timestamp, order: .forward)
+    private var allMessages: [ChatMessage]
     
     @StateObject private var viewModel = ChatViewModel()
     @State private var messageText = ""
@@ -20,34 +14,59 @@ struct ChatView: View {
     @State private var showFullScreenImage: (Bool, String?) = (false, nil)
     @FocusState private var isInputFocused: Bool
     
+    // Pagination state
+    @State private var displayedMessageCount = 15
+    @State private var isLoadingMore = false
+    @State private var isInitialLoad = true
+    @State private var scrollPosition: String?
+    
+    private var displayedMessages: [ChatMessage] {
+        // Get the latest N messages
+        Array(allMessages.suffix(displayedMessageCount))
+    }
+    
+    private var canLoadMore: Bool {
+        displayedMessageCount < allMessages.count
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
-            // Messages List
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(messages) { message in
-                            MessageBubbleView(
-                                chatMessage: message,
-                                onImageTap: { imagePath in
-                                    showFullScreenImage = (true, imagePath)
-                                }
-                            )
-                            .id(message.id)
+            // Messages List - Rotated approach for bottom-anchored scrolling
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    // Load more indicator at top
+                    if canLoadMore {
+                        LoadMoreView(isLoading: $isLoadingMore)
+                    }
+                    
+                    ForEach(Array(displayedMessages.enumerated()), id: \.element.id) { index, message in
+                        MessageBubbleView(
+                            chatMessage: message,
+                            onImageTap: { imagePath in
+                                showFullScreenImage = (true, imagePath)
+                            }
+                        )
+                        .id(message.id)
+                        .onAppear {
+                            // Preload when reaching 5th message from the START (oldest messages)
+                            // Since messages are ordered oldest to newest, index 4 means 5th oldest
+                            if !isInitialLoad && index == 4 && canLoadMore {
+                                loadMoreMessages()
+                            }
                         }
                     }
-                    .padding()
                 }
-                .onChange(of: messages.count) { _, _ in
-                    scrollToBottom(proxy: proxy)
+                .padding()
+            }
+            .scrollPosition(id: $scrollPosition, anchor: .top)
+            .defaultScrollAnchor(.bottom)
+            .onAppear {
+                if allMessages.isEmpty {
+                    loadSeedData()
                 }
-                .onAppear {
-                    if messages.isEmpty {
-                        loadSeedData()
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        scrollToBottom(proxy: proxy)
-                    }
+                // Mark initial load as complete after a short delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isInitialLoad = false
                 }
             }
             
@@ -68,9 +87,6 @@ struct ChatView: View {
                 selectedImage = nil
             }
         }
-        .onChange(of:showFullScreenImage.0 ) { oldValue, newValue in
-            print("new value", newValue)
-        }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $selectedImage, sourceType: .photoLibrary)
         }
@@ -84,11 +100,25 @@ struct ChatView: View {
         }
     }
     
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        if let lastMessage = messages.last {
-            withAnimation(.easeOut(duration: 0.3)) {
-                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+    private func loadMoreMessages() {
+        guard !isLoadingMore && canLoadMore else { return }
+        
+        isLoadingMore = true
+        
+        // Save the current first visible message to maintain scroll position
+        let currentFirstMessage = displayedMessages.first?.id
+        
+        // Load immediately without delay for seamless experience
+        DispatchQueue.main.async {
+            // Increase count smoothly
+            displayedMessageCount += 15
+            
+            // Restore scroll position to the message that was at top
+            if let firstMessageId = currentFirstMessage {
+                scrollPosition = firstMessageId
             }
+            
+            isLoadingMore = false
         }
     }
     
@@ -109,11 +139,9 @@ struct ChatView: View {
     }
     
     private func sendImageMessage(image: UIImage) {
-        // Save image to documents directory
         let fileName = "\(UUID().uuidString).jpg"
         if let imageURL = saveImage(image: image, fileName: fileName) {
             let fileSize = getFileSize(url: imageURL)
-            
             let newMessage = ChatMessage(
                 id: UUID().uuidString,
                 message: "Image attachment",
@@ -123,25 +151,34 @@ struct ChatView: View {
                 sender: "user",
                 timestamp: Int64(Date().timeIntervalSince1970 * 1000)
             )
-            
             modelContext.insert(newMessage)
         }
     }
     
     private func saveImage(image: UIImage, fileName: String) -> URL? {
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard
+            let data = image.jpegData(compressionQuality: 0.8),
+            let documentsDirectory = FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask)
+                .first
+        else {
+            return nil
+        }
+
         let fileURL = documentsDirectory.appendingPathComponent(fileName)
-        
-        try? data.write(to: fileURL)
-        return fileURL
+
+        do {
+            try data.write(to: fileURL)
+            return fileURL
+        } catch {
+            print("Failed to write image: \(error)")
+            return nil
+        }
     }
     
     private func getFileSize(url: URL) -> Int {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let fileSize = attributes[.size] as? Int else {
-            return 0
-        }
+              let fileSize = attributes[.size] as? Int else { return 0 }
         return fileSize
     }
     
@@ -150,5 +187,26 @@ struct ChatView: View {
         for message in seedMessages {
             modelContext.insert(message)
         }
+    }
+}
+
+// Load More Indicator View
+struct LoadMoreView: View {
+    @Binding var isLoading: Bool
+    
+    var body: some View {
+        HStack {
+            Spacer()
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+            } else {
+                Text("Loading more messages...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 8)
     }
 }
