@@ -8,20 +8,30 @@
 import SwiftUI
 
 struct HomeView: View {
+    
+    private let welcomeMessages = [
+        "Your AI-powered conversation helper",
+        "Ask anything. Build everything.",
+        "Smart chats. Real answers."
+    ]
+    
+    //@State private var selectedMessage = ""
+    @State private var showSubtitle = false
+    
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.blue.gradient)
+            VStack(spacing: 16) {
+                Spacer()
                 
-                Text("Chat Assistant")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                TypingText(
+                    text: "Welcome to Crew!",
+                    typingSpeed: 0.08
+                )
+                .font(.largeTitle)
+                .fontWeight(.bold)
                 
-                Text("Your AI-powered conversation helper")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                Spacer()
+                    .frame(height: 10)
                 
                 NavigationLink(destination: ChatView()) {
                     HStack {
@@ -31,17 +41,18 @@ struct HomeView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(.blue)
+                    .background(.brown)
                     .foregroundColor(.white)
                     .cornerRadius(12)
                 }
                 .padding(.horizontal, 40)
                 .padding(.top, 20)
+                Spacer()
             }
-            .navigationTitle("Home")
         }
     }
 }
+
 
 #Preview {
     HomeView()

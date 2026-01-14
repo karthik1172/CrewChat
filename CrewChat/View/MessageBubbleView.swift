@@ -26,7 +26,7 @@ struct MessageBubbleView: View {
                     Text(chatMessage.message)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(chatMessage.sender == "user" ? Color.blue : Color(.systemGray5))
+                        .background(chatMessage.sender == "user" ? Color.brown : Color(.systemGray5))
                         .foregroundColor(chatMessage.sender == "user" ? .white : .primary)
                         .cornerRadius(18)
 
@@ -92,7 +92,7 @@ struct MessageBubbleView: View {
                     .padding(8)
                     .background(
                         chatMessage.sender == "user"
-                        ? Color.blue.opacity(0.1)
+                        ? Color.brown.opacity(0.2)
                         : Color(.systemGray6)
                     )
                     .cornerRadius(12)

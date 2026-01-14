@@ -13,6 +13,7 @@ struct CrewChatApp: App {
     var body: some Scene {
         WindowGroup {
             HomeView()
+                .tint(.brown)
         }
         .modelContainer(for: ChatMessage.self)
     }
