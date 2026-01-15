@@ -84,3 +84,12 @@ git clone https://github.com/karthik1172/CrewChat.git
 
 # 📸 Screenshots
 
+Long press to Copy
+<img width="585" height="1266" alt="Image" src="https://github.com/user-attachments/assets/1b224dfa-d731-42d9-8252-f2dfbb491420" />
+
+Pinch to zoom
+https://github.com/user-attachments/assets/5a8610be-87d8-43fb-8f1d-d6291ed024a1
+
+Full working demo
+https://youtube.com/shorts/ROxsLOT1FaQ?feature=share
+
