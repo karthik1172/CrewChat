@@ -88,6 +88,7 @@ struct ChatView: View {
                     }
                     .padding()
                 }
+                .scrollIndicators(.hidden)
                 .scrollPosition(id: $scrollPosition, anchor: .bottom)
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
