@@ -35,7 +35,7 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
     @State private var messageText = ""
     @State private var selectedImage: UIImage?
-    @State private var showFullScreenImage: (Bool, String?) = (false, nil)
+    @State private var fullScreenImage: UIImage?
     @FocusState private var isInputFocused: Bool
     
     // iMessage Photo Picker properties
@@ -61,48 +61,60 @@ struct ChatView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Messages List
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    // Load more indicator at top
-                    if canLoadMore {
-                        LoadMoreView(isLoading: $isLoadingMore)
-                    }
-                    
-                    ForEach(Array(displayedMessages.enumerated()), id: \.element.id) { index, message in
-                        MessageBubbleView(
-                            chatMessage: message,
-                            onImageTap: { imagePath in
-                                showFullScreenImage = (true, imagePath)
-                            }
-                        )
-                        .id(message.id)
-                        .onAppear {
-                            if !isInitialLoad && index == 4 && canLoadMore {
-                                loadMoreMessages()
+        ZStack {
+            VStack(spacing: 0) {
+                // Messages List
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        // Load more indicator at top
+                        if canLoadMore {
+                            LoadMoreView(isLoading: $isLoadingMore)
+                        }
+                        
+                        ForEach(Array(displayedMessages.enumerated()), id: \.element.id) { index, message in
+                            MessageBubbleView(
+                                chatMessage: message,
+                                onImageTap: { imagePath in
+                                    loadImageForFullScreen(path: imagePath)
+                                }
+                            )
+                            .id(message.id)
+                            .onAppear {
+                                if !isInitialLoad && index == 4 && canLoadMore {
+                                    loadMoreMessages()
+                                }
                             }
                         }
                     }
+                    .padding()
                 }
-                .padding()
+                .scrollPosition(id: $scrollPosition, anchor: .bottom)
+                .defaultScrollAnchor(.bottom)
+                .scrollDismissesKeyboard(.interactively)
+                .onAppear {
+                    if allMessages.isEmpty {
+                        loadSeedData()
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        isInitialLoad = false
+                    }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    BottomBar()
+                }
             }
-            .scrollPosition(id: $scrollPosition, anchor: .bottom)
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .onAppear {
-                if allMessages.isEmpty {
-                    loadSeedData()
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    isInitialLoad = false
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                BottomBar()
+            .ignoresSafeArea(.keyboard, edges: .all)
+            
+            // Full screen image overlay
+            if let image = fullScreenImage {
+                FullScreenImageOverlay(image: image, isPresented: Binding(
+                    get: { fullScreenImage != nil },
+                    set: { if !$0 { fullScreenImage = nil } }
+                ))
+                .transition(.opacity)
+                .zIndex(999)
             }
         }
-        .ignoresSafeArea(.keyboard, edges: .all)
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: selectedPhoto) { _, newPhoto in
@@ -114,11 +126,6 @@ struct ChatView: View {
             if let image = newImage {
                 sendImageMessage(image: image)
                 capturedImage = nil
-            }
-        }
-        .fullScreenCover(isPresented: $showFullScreenImage.0) {
-            if let imagePath = showFullScreenImage.1 {
-                FullScreenImageView(imagePath: imagePath, isPresented: $showFullScreenImage.0)
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
@@ -170,7 +177,7 @@ struct ChatView: View {
                     sendMessage()
                 }
             
-            // Send button (only show when there's text)
+            // Send button
             if !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button {
                     sendMessage()
@@ -214,6 +221,66 @@ struct ChatView: View {
     
     var animatedKeyBoardHeight: CGFloat {
         (properties.showPhotoPicker || isInputFocused) ? properties.keyBoardHeight : 0
+    }
+    
+    private func loadImageForFullScreen(path: String) {
+        print("🔍 Loading image from path: \(path)")
+        
+        // Handle URL-based images
+        if path.hasPrefix("http") {
+            print("🌐 Loading URL-based image")
+            Task {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: URL(string: path)!)
+                    if let image = UIImage(data: data) {
+                        await MainActor.run {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                fullScreenImage = image
+                            }
+                            print("✅ URL image loaded successfully")
+                        }
+                    } else {
+                        print("❌ Failed to create image from URL data")
+                    }
+                } catch {
+                    print("❌ Failed to load URL image: \(error.localizedDescription)")
+                }
+            }
+            return
+        }
+        
+        // Try to load local image synchronously
+        var loadedImage: UIImage?
+        
+        // Try direct path
+        loadedImage = UIImage(contentsOfFile: path)
+        
+        // Try with Documents directory
+        if loadedImage == nil {
+            let fileName = (path as NSString).lastPathComponent
+            let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let fileURL = documentsDirectory.appendingPathComponent(fileName)
+            loadedImage = UIImage(contentsOfFile: fileURL.path)
+            print("🔍 Trying Documents directory: \(fileURL.path)")
+        }
+        
+        // Try with Data
+        if loadedImage == nil {
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+                loadedImage = UIImage(data: data)
+                print("✅ Loaded with Data initializer")
+            }
+        }
+        
+        if let image = loadedImage {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                fullScreenImage = image
+            }
+            print("✅ Image loaded successfully")
+        } else {
+            print("❌ Failed to load image from: \(path)")
+            print("   File exists: \(FileManager.default.fileExists(atPath: path))")
+        }
     }
     
     private func loadMoreMessages() {
@@ -314,44 +381,6 @@ struct ChatView: View {
         let seedMessages = viewModel.getSeedMessages()
         for message in seedMessages {
             modelContext.insert(message)
-        }
-    }
-}
-
-// Camera View using UIImagePickerController
-struct CameraView: UIViewControllerRepresentable {
-    @Binding var capturedImage: UIImage?
-    @Environment(\.dismiss) private var dismiss
-    
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.delegate = context.coordinator
-        return picker
-    }
-    
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: CameraView
-        
-        init(_ parent: CameraView) {
-            self.parent = parent
-        }
-        
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.capturedImage = image
-            }
-            parent.dismiss()
-        }
-        
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
         }
     }
 }
