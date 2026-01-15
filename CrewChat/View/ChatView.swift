@@ -42,6 +42,10 @@ struct ChatView: View {
     @State private var properties: PickerInteractionProperty = .init()
     @State private var selectedPhoto: PhotosPickerItem?
     
+    // Camera properties
+    @State private var showCamera = false
+    @State private var capturedImage: UIImage?
+    
     // Pagination state
     @State private var displayedMessageCount = 15
     @State private var isLoadingMore = false
@@ -106,16 +110,45 @@ struct ChatView: View {
                 loadPhotoData(from: photo)
             }
         }
+        .onChange(of: capturedImage) { _, newImage in
+            if let image = newImage {
+                sendImageMessage(image: image)
+                capturedImage = nil
+            }
+        }
         .fullScreenCover(isPresented: $showFullScreenImage.0) {
             if let imagePath = showFullScreenImage.1 {
                 FullScreenImageView(imagePath: imagePath, isPresented: $showFullScreenImage.0)
             }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraView(capturedImage: $capturedImage)
         }
     }
     
     @ViewBuilder
     func BottomBar() -> some View {
         HStack(alignment: .bottom, spacing: 8) {
+            // Camera button
+            Button {
+                if properties.showPhotoPicker {
+                    properties.showPhotoPicker = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showCamera = true
+                    }
+                } else {
+                    showCamera = true
+                }
+            } label: {
+                Image(systemName: "camera.fill")
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.primary)
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: .circle)
+                    .contentShape(.circle)
+            }
+            
+            // Photo picker button
             Button {
                 properties.showPhotoPicker.toggle()
             } label: {
@@ -263,6 +296,44 @@ struct ChatView: View {
         let seedMessages = viewModel.getSeedMessages()
         for message in seedMessages {
             modelContext.insert(message)
+        }
+    }
+}
+
+// Camera View using UIImagePickerController
+struct CameraView: UIViewControllerRepresentable {
+    @Binding var capturedImage: UIImage?
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraView
+        
+        init(_ parent: CameraView) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.capturedImage = image
+            }
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
         }
     }
 }

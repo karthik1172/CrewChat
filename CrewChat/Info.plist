@@ -8,5 +8,7 @@
 	</array>
     <key>UILaunchStoryboardName</key>
     <string>Launch Screen</string>
+    <key>NSCameraUsageDescription</key>
+    <string>We need camera access to take photos</string>
 </dict>
 </plist>
