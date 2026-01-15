@@ -87,7 +87,7 @@ struct ChatView: View {
                 }
                 .padding()
             }
-            .scrollPosition(id: $scrollPosition, anchor: .top)
+            .scrollPosition(id: $scrollPosition, anchor: .bottom)
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .onAppear {
@@ -233,6 +233,14 @@ struct ChatView: View {
         }
     }
     
+    private func scrollToBottom() {
+        if let lastMessage = displayedMessages.last {
+            withAnimation {
+                scrollPosition = lastMessage.id
+            }
+        }
+    }
+    
     private func sendMessage() {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
@@ -247,6 +255,11 @@ struct ChatView: View {
         modelContext.insert(newMessage)
         messageText = ""
         isInputFocused = false
+        
+        // Scroll to the new message after a brief delay to ensure it's rendered
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            scrollToBottom()
+        }
     }
     
     private func loadPhotoData(from item: PhotosPickerItem) {
@@ -275,6 +288,11 @@ struct ChatView: View {
                 timestamp: Int64(Date().timeIntervalSince1970 * 1000)
             )
             modelContext.insert(newMessage)
+            
+            // Scroll to the new message after a brief delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                scrollToBottom()
+            }
         }
     }
     
