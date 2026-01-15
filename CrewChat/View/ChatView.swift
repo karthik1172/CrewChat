@@ -1,18 +1,46 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+
+struct PickerInteractionProperty {
+    var storedKeyboardHeight: CGFloat = 0
+    var bragOffset: CGFloat = 0
+    var showPhotoPicker: Bool = false
+    
+    var keyBoardHeight: CGFloat {
+        storedKeyboardHeight == 0 ? 300 : storedKeyboardHeight
+    }
+    
+    var safeArea: UIEdgeInsets {
+        if let safeArea = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow?.safeAreaInsets {
+            return safeArea
+        }
+        return .zero
+    }
+    var screenSize: CGSize {
+        if let size = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size {
+            return size
+        }
+        return .zero
+    }
+    var animation: Animation {
+        .interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: 0)
+    }
+}
 
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \ChatMessage.timestamp, order: .forward)
-    private var allMessages: [ChatMessage]
-    
+    @Query(sort: \ChatMessage.timestamp, order: .forward) private var allMessages: [ChatMessage]
+
     @StateObject private var viewModel = ChatViewModel()
     @State private var messageText = ""
-    @State private var showImagePicker = false
-    @State private var showCamera = false
     @State private var selectedImage: UIImage?
     @State private var showFullScreenImage: (Bool, String?) = (false, nil)
     @FocusState private var isInputFocused: Bool
+    
+    // iMessage Photo Picker properties
+    @State private var properties: PickerInteractionProperty = .init()
+    @State private var selectedPhoto: PhotosPickerItem?
     
     // Pagination state
     @State private var displayedMessageCount = 15
@@ -21,7 +49,6 @@ struct ChatView: View {
     @State private var scrollPosition: String?
     
     private var displayedMessages: [ChatMessage] {
-        // Get the latest N messages
         Array(allMessages.suffix(displayedMessageCount))
     }
     
@@ -31,7 +58,7 @@ struct ChatView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Messages List - Rotated approach for bottom-anchored scrolling
+            // Messages List
             ScrollView {
                 LazyVStack(spacing: 12) {
                     // Load more indicator at top
@@ -48,8 +75,6 @@ struct ChatView: View {
                         )
                         .id(message.id)
                         .onAppear {
-                            // Preload when reaching 5th message from the START (oldest messages)
-                            // Since messages are ordered oldest to newest, index 4 means 5th oldest
                             if !isInitialLoad && index == 4 && canLoadMore {
                                 loadMoreMessages()
                             }
@@ -60,38 +85,26 @@ struct ChatView: View {
             }
             .scrollPosition(id: $scrollPosition, anchor: .top)
             .defaultScrollAnchor(.bottom)
+            .scrollDismissesKeyboard(.interactively)
             .onAppear {
                 if allMessages.isEmpty {
                     loadSeedData()
                 }
-                // Mark initial load as complete after a short delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     isInitialLoad = false
                 }
             }
-            
-            // Input Bar
-            InputBar(
-                messageText: $messageText,
-                isInputFocused: $isInputFocused,
-                onSend: sendMessage,
-                onImagePicker: { showImagePicker = true },
-                onCamera: { showCamera = true }
-            )
-        }
-        .navigationTitle("Chat")
-        .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: selectedImage) { _, newImage in
-            if let image = newImage {
-                sendImageMessage(image: image)
-                selectedImage = nil
+            .safeAreaInset(edge: .bottom) {
+                BottomBar()
             }
         }
-        .sheet(isPresented: $showImagePicker) {
-            ImagePicker(image: $selectedImage, sourceType: .photoLibrary)
-        }
-        .sheet(isPresented: $showCamera) {
-            ImagePicker(image: $selectedImage, sourceType: .camera)
+        .ignoresSafeArea(.keyboard, edges: .all)
+        .navigationTitle("Chat")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: selectedPhoto) { _, newPhoto in
+            if let photo = newPhoto {
+                loadPhotoData(from: photo)
+            }
         }
         .fullScreenCover(isPresented: $showFullScreenImage.0) {
             if let imagePath = showFullScreenImage.1 {
@@ -100,20 +113,85 @@ struct ChatView: View {
         }
     }
     
+    @ViewBuilder
+    func BottomBar() -> some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            Button {
+                properties.showPhotoPicker.toggle()
+            } label: {
+                Image(systemName: "paperclip")
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.primary)
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: .circle)
+                    .contentShape(.circle)
+            }
+            
+            TextField("Message...", text: $messageText, axis: .vertical)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+                .clipShape(.rect(cornerRadius: 30))
+                .focused($isInputFocused)
+                .onSubmit {
+                    sendMessage()
+                }
+            
+            // Send button (only show when there's text)
+            if !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button {
+                    sendMessage()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(.white, .brown)
+                }
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.bottom, 10)
+        .geometryGroup()
+        .padding(.bottom, animatedKeyBoardHeight)
+        .animation(properties.animation, value: animatedKeyBoardHeight)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { info in
+            if let frame = info.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue {
+                let height = frame.cgRectValue.height
+                if properties.storedKeyboardHeight == 0 {
+                    properties.storedKeyboardHeight = max(height - properties.safeArea.bottom, 0)
+                }
+            }
+        }
+        .sheet(isPresented: $properties.showPhotoPicker) {
+            PhotosPicker("", selection: $selectedPhoto)
+                .photosPickerStyle(.inline)
+                .presentationDetents([.height(properties.keyBoardHeight), .large])
+                .presentationBackgroundInteraction(.enabled(upThrough: .height(properties.keyBoardHeight)))
+        }
+        .onChange(of: properties.showPhotoPicker) { _, newValue in
+            if newValue {
+                isInputFocused = false
+            }
+        }
+        .onChange(of: isInputFocused) { _, newValue in
+            if newValue {
+                properties.showPhotoPicker = false
+            }
+        }
+    }
+    
+    var animatedKeyBoardHeight: CGFloat {
+        (properties.showPhotoPicker || isInputFocused) ? properties.keyBoardHeight : 0
+    }
+    
     private func loadMoreMessages() {
         guard !isLoadingMore && canLoadMore else { return }
         
         isLoadingMore = true
-        
-        // Save the current first visible message to maintain scroll position
         let currentFirstMessage = displayedMessages.first?.id
         
-        // Load immediately without delay for seamless experience
         DispatchQueue.main.async {
-            // Increase count smoothly
             displayedMessageCount += 15
             
-            // Restore scroll position to the message that was at top
             if let firstMessageId = currentFirstMessage {
                 scrollPosition = firstMessageId
             }
@@ -138,6 +216,18 @@ struct ChatView: View {
         isInputFocused = false
     }
     
+    private func loadPhotoData(from item: PhotosPickerItem) {
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                await MainActor.run {
+                    sendImageMessage(image: image)
+                    selectedPhoto = nil
+                }
+            }
+        }
+    }
+    
     private func sendImageMessage(image: UIImage) {
         let fileName = "\(UUID().uuidString).jpg"
         if let imageURL = saveImage(image: image, fileName: fileName) {
@@ -156,24 +246,11 @@ struct ChatView: View {
     }
     
     private func saveImage(image: UIImage, fileName: String) -> URL? {
-        guard
-            let data = image.jpegData(compressionQuality: 0.8),
-            let documentsDirectory = FileManager.default
-                .urls(for: .documentDirectory, in: .userDomainMask)
-                .first
-        else {
-            return nil
-        }
-
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsDirectory.appendingPathComponent(fileName)
-
-        do {
-            try data.write(to: fileURL)
-            return fileURL
-        } catch {
-            print("Failed to write image: \(error)")
-            return nil
-        }
+        try? data.write(to: fileURL)
+        return fileURL
     }
     
     private func getFileSize(url: URL) -> Int {
