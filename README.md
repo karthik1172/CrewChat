@@ -85,6 +85,7 @@ git clone https://github.com/karthik1172/CrewChat.git
 # 📸 Screenshots
 
 Long press to Copy
+
 <img width="585" height="1266" alt="Image" src="https://github.com/user-attachments/assets/1b224dfa-d731-42d9-8252-f2dfbb491420" />
 
 
