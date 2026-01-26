@@ -225,62 +225,14 @@ struct ChatView: View {
     }
     
     private func loadImageForFullScreen(path: String) {
-        print("🔍 Loading image from path: \(path)")
-        
-        // Handle URL-based images
-        if path.hasPrefix("http") {
-            print("🌐 Loading URL-based image")
-            Task {
-                do {
-                    let (data, _) = try await URLSession.shared.data(from: URL(string: path)!)
-                    if let image = UIImage(data: data) {
-                        await MainActor.run {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                fullScreenImage = image
-                            }
-                            print("✅ URL image loaded successfully")
-                        }
-                    } else {
-                        print("❌ Failed to create image from URL data")
+        Task {
+            if let image = await ImageLoader.shared.loadImage(from: path) {
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        fullScreenImage = image
                     }
-                } catch {
-                    print("❌ Failed to load URL image: \(error.localizedDescription)")
                 }
             }
-            return
-        }
-        
-        // Try to load local image synchronously
-        var loadedImage: UIImage?
-        
-        // Try direct path
-        loadedImage = UIImage(contentsOfFile: path)
-        
-        // Try with Documents directory
-        if loadedImage == nil {
-            let fileName = (path as NSString).lastPathComponent
-            let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let fileURL = documentsDirectory.appendingPathComponent(fileName)
-            loadedImage = UIImage(contentsOfFile: fileURL.path)
-            print("🔍 Trying Documents directory: \(fileURL.path)")
-        }
-        
-        // Try with Data
-        if loadedImage == nil {
-            if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
-                loadedImage = UIImage(data: data)
-                print("✅ Loaded with Data initializer")
-            }
-        }
-        
-        if let image = loadedImage {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                fullScreenImage = image
-            }
-            print("✅ Image loaded successfully")
-        } else {
-            print("❌ Failed to load image from: \(path)")
-            print("   File exists: \(FileManager.default.fileExists(atPath: path))")
         }
     }
     
@@ -344,8 +296,8 @@ struct ChatView: View {
     
     private func sendImageMessage(image: UIImage) {
         let fileName = "\(UUID().uuidString).jpg"
-        if let imageURL = saveImage(image: image, fileName: fileName) {
-            let fileSize = getFileSize(url: imageURL)
+        if let imageURL = ImageLoader.shared.saveImage(image, fileName: fileName) {
+            let fileSize = ImageLoader.shared.getFileSize(at: imageURL.path) ?? 0
             let newMessage = ChatMessage(
                 id: UUID().uuidString,
                 message: "Image attachment",

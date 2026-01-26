@@ -61,37 +61,13 @@ struct ImageMessageView: View {
     
     private func loadLocalImage() {
         guard !filePath.hasPrefix("http") else { return }
-        guard loadedImage == nil else { return } // Don't reload if already loaded
+        guard loadedImage == nil else { return }
         
-        // Try multiple loading strategies
-        DispatchQueue.global(qos: .userInitiated).async {
-            var image: UIImage?
-            
-            // Strategy 1: Direct path
-            image = UIImage(contentsOfFile: filePath)
-            
-            // Strategy 2: Reconstruct from filename
-            if image == nil {
-                let fileName = (filePath as NSString).lastPathComponent
-                if let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-                    let fileURL = documentsDirectory.appendingPathComponent(fileName)
-                    image = UIImage(contentsOfFile: fileURL.path)
+        Task {
+            if let image = await ImageLoader.shared.loadImage(from: filePath) {
+                await MainActor.run {
+                    self.loadedImage = image
                 }
-            }
-            
-            // Strategy 3: Data initializer
-            if image == nil {
-                if let data = try? Data(contentsOf: URL(fileURLWithPath: filePath)) {
-                    image = UIImage(data: data)
-                }
-            }
-            
-            if let finalImage = image {
-                DispatchQueue.main.async {
-                    self.loadedImage = finalImage
-                }
-            } else {
-                print("❌ ImageMessageView: Failed to load \(filePath)")
             }
         }
     }
