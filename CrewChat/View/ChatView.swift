@@ -295,33 +295,33 @@ struct ChatView: View {
     }
     
     private func sendImageMessage(image: UIImage) {
-        let fileName = "\(UUID().uuidString).jpg"
-        if let imageURL = ImageLoader.shared.saveImage(image, fileName: fileName) {
-            let fileSize = ImageLoader.shared.getFileSize(at: imageURL.path) ?? 0
-            let newMessage = ChatMessage(
-                id: UUID().uuidString,
-                message: "Image attachment",
-                type: "file",
-                filePath: imageURL.path,
-                fileSize: fileSize,
-                sender: "user",
-                timestamp: Int64(Date().timeIntervalSince1970 * 1000)
-            )
-            modelContext.insert(newMessage)
-            
-            // Scroll to the new message after a brief delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                scrollToBottom()
+        Task {
+            let fileName = "\(UUID().uuidString).jpg"
+
+            if let imageURL = await ImageLoader.shared.saveImage(image, fileName: fileName) {
+                
+                let fileSize = ImageLoader.shared.getFileSize(at: imageURL.path) ?? 0
+                
+                let newMessage = ChatMessage(
+                    id: UUID().uuidString,
+                    message: "Image attachment",
+                    type: "file",
+                    filePath: imageURL.path,
+                    fileSize: fileSize,
+                    sender: "user",
+                    timestamp: Int64(Date().timeIntervalSince1970 * 1000)
+                )
+
+                // Back on main actor for SwiftData + UI
+                await MainActor.run {
+                    modelContext.insert(newMessage)
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scrollToBottom()
+                    }
+                }
             }
         }
-    }
-    
-    private func saveImage(image: UIImage, fileName: String) -> URL? {
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = documentsDirectory.appendingPathComponent(fileName)
-        try? data.write(to: fileURL)
-        return fileURL
     }
     
     private func getFileSize(url: URL) -> Int {

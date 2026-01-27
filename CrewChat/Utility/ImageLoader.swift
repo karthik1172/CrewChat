@@ -94,29 +94,32 @@ class ImageLoader {
     // MARK: - Image Saving
     
     /// Save image to Documents directory and return the file URL
-    func saveImage(_ image: UIImage, fileName: String? = nil, compressionQuality: CGFloat = 0.8) -> URL? {
-        guard let data = image.jpegData(compressionQuality: compressionQuality) else {
-            print(" Failed to convert image to JPEG data")
-            return nil
-        }
+    func saveImage(_ image: UIImage, fileName: String? = nil, compressionQuality: CGFloat = 0.8) async -> URL? {
         
-        let finalFileName = fileName ?? "\(UUID().uuidString).jpg"
-        
-        guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            print(" Failed to access Documents directory")
-            return nil
-        }
-        
-        let fileURL = documentsDirectory.appendingPathComponent(finalFileName)
-        
-        do {
-            try data.write(to: fileURL)
-            print(" Image saved to: \(fileURL.path)")
-            return fileURL
-        } catch {
-            print(" Failed to save image: \(error.localizedDescription)")
-            return nil
-        }
+        await Task.detached(priority: .utility) {
+            guard let data = image.jpegData(compressionQuality: compressionQuality) else {
+                print(" Failed to convert image to JPEG data")
+                return nil
+            }
+            
+            let finalFileName = fileName ?? "\(UUID().uuidString).jpg"
+            
+            guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                print(" Failed to access Documents directory")
+                return nil
+            }
+            
+            let fileURL = documentsDirectory.appendingPathComponent(finalFileName)
+            
+            do {
+                try data.write(to: fileURL)
+                print(" Image saved to: \(fileURL.path)")
+                return fileURL
+            } catch {
+                print(" Failed to save image: \(error.localizedDescription)")
+                return nil
+            }
+        }.value
     }
     
     // MARK: - Helper Methods
