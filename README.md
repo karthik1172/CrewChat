@@ -86,7 +86,7 @@ git clone https://github.com/karthik1172/CrewChat.git
 
 Long press to Copy
 
-<img width="585" height="1266" alt="Image" src="https://github.com/user-attachments/assets/1b224dfa-d731-42d9-8252-f2dfbb491420" />
+<img width="1206" height="2622" alt="Image" src="https://github.com/user-attachments/assets/73d1f2d8-3d8c-4ac8-b024-116b76c8dbd4" />
 
 
 Full working demo youtube link: 
