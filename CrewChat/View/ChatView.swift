@@ -33,31 +33,17 @@ struct ChatView: View {
     @Query(sort: \ChatMessage.timestamp, order: .forward) private var allMessages: [ChatMessage]
 
     @StateObject private var viewModel = ChatViewModel()
-    @State private var messageText = ""
-    @State private var selectedImage: UIImage?
-    @State private var fullScreenImage: UIImage?
     @FocusState private var isInputFocused: Bool
     
     // iMessage Photo Picker properties
     @State private var properties: PickerInteractionProperty = .init()
-    @State private var selectedPhoto: PhotosPickerItem?
-    
-    // Camera properties
-    @State private var showCamera = false
-    @State private var capturedImage: UIImage?
-    
-    // Pagination state
-    @State private var displayedMessageCount = 15
-    @State private var isLoadingMore = false
-    @State private var isInitialLoad = true
-    @State private var scrollPosition: String?
     
     private var displayedMessages: [ChatMessage] {
-        Array(allMessages.suffix(displayedMessageCount))
+        viewModel.getDisplayedMessages(from: allMessages)
     }
     
     private var canLoadMore: Bool {
-        displayedMessageCount < allMessages.count
+        viewModel.canLoadMore(totalMessages: allMessages.count)
     }
     
     var body: some View {
@@ -68,20 +54,20 @@ struct ChatView: View {
                     LazyVStack(spacing: 12) {
                         // Load more indicator at top
                         if canLoadMore {
-                            LoadMoreView(isLoading: $isLoadingMore)
+                            LoadMoreView(isLoading: $viewModel.isLoadingMore)
                         }
                         
                         ForEach(Array(displayedMessages.enumerated()), id: \.element.id) { index, message in
                             MessageBubbleView(
                                 chatMessage: message,
                                 onImageTap: { imagePath in
-                                    loadImageForFullScreen(path: imagePath)
+                                    viewModel.loadImageForFullScreen(path: imagePath)
                                 }
                             )
                             .id(message.id)
                             .onAppear {
-                                if !isInitialLoad && index == 4 && canLoadMore {
-                                    loadMoreMessages()
+                                if !viewModel.isInitialLoad && index == 4 && canLoadMore {
+                                    viewModel.loadMoreMessages(currentFirstMessageId: displayedMessages.first?.id)
                                 }
                             }
                         }
@@ -89,16 +75,15 @@ struct ChatView: View {
                     .padding()
                 }
                 .scrollIndicators(.hidden)
-                .scrollPosition(id: $scrollPosition, anchor: .bottom)
+                .scrollPosition(id: $viewModel.scrollPosition, anchor: .bottom)
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
                 .onAppear {
+                    viewModel.setModelContext(modelContext)
                     if allMessages.isEmpty {
-                        loadSeedData()
+                        viewModel.loadSeedData(into: modelContext)
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        isInitialLoad = false
-                    }
+                    viewModel.completeInitialLoad()
                 }
                 .safeAreaInset(edge: .bottom) {
                     BottomBar()
@@ -107,30 +92,27 @@ struct ChatView: View {
             .ignoresSafeArea(.keyboard, edges: .all)
             
             // Full screen image overlay
-            if let image = fullScreenImage {
+            if let image = viewModel.fullScreenImage {
                 FullScreenImageOverlay(image: image, isPresented: Binding(
-                    get: { fullScreenImage != nil },
-                    set: { if !$0 { fullScreenImage = nil } }
+                    get: { viewModel.fullScreenImage != nil },
+                    set: { if !$0 { viewModel.dismissFullScreenImage() } }
                 ))
                 .transition(.opacity)
                 .zIndex(999)
             }
         }
-        .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: selectedPhoto) { _, newPhoto in
+        .onChange(of: viewModel.selectedPhoto) { _, newPhoto in
             if let photo = newPhoto {
-                loadPhotoData(from: photo)
+                viewModel.loadPhotoData(from: photo)
             }
         }
-        .onChange(of: capturedImage) { _, newImage in
-            if let image = newImage {
-                sendImageMessage(image: image)
-                capturedImage = nil
-            }
+        .onChange(of: viewModel.capturedImage) { _, newImage in
+            viewModel.handleCapturedImage(newImage)
         }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraView(capturedImage: $capturedImage)
+        .fullScreenCover(isPresented: $viewModel.showCamera) {
+            CameraView(capturedImage: $viewModel.capturedImage)
+                .ignoresSafeArea()
         }
     }
     
@@ -142,10 +124,10 @@ struct ChatView: View {
                 if properties.showPhotoPicker {
                     properties.showPhotoPicker = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showCamera = true
+                        viewModel.showCamera = true
                     }
                 } else {
-                    showCamera = true
+                    viewModel.showCamera = true
                 }
             } label: {
                 Image(systemName: "camera.fill")
@@ -168,20 +150,20 @@ struct ChatView: View {
                     .contentShape(.circle)
             }
             
-            TextField("Message...", text: $messageText, axis: .vertical)
+            TextField("Message...", text: $viewModel.messageText, axis: .vertical)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
                 .clipShape(.rect(cornerRadius: 30))
                 .focused($isInputFocused)
                 .onSubmit {
-                    sendMessage()
+                    handleSendMessage()
                 }
             
             // Send button
-            if !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !viewModel.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button {
-                    sendMessage()
+                    handleSendMessage()
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 34))
@@ -204,7 +186,7 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $properties.showPhotoPicker) {
-            PhotosPicker("", selection: $selectedPhoto)
+            PhotosPicker("", selection: $viewModel.selectedPhoto)
                 .photosPickerStyle(.inline)
                 .presentationDetents([.height(properties.keyBoardHeight), .large])
                 .presentationBackgroundInteraction(.enabled(upThrough: .height(properties.keyBoardHeight)))
@@ -225,116 +207,12 @@ struct ChatView: View {
         (properties.showPhotoPicker || isInputFocused) ? properties.keyBoardHeight : 0
     }
     
-    private func loadImageForFullScreen(path: String) {
-        Task {
-            if let image = await ImageLoader.shared.loadImage(from: path) {
-                await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        fullScreenImage = image
-                    }
-                }
-            }
-        }
-    }
-    
-    private func loadMoreMessages() {
-        guard !isLoadingMore && canLoadMore else { return }
-        
-        isLoadingMore = true
-        let currentFirstMessage = displayedMessages.first?.id
-        
-        DispatchQueue.main.async {
-            displayedMessageCount += 15
-            
-            if let firstMessageId = currentFirstMessage {
-                scrollPosition = firstMessageId
-            }
-            
-            isLoadingMore = false
-        }
-    }
-    
-    private func scrollToBottom() {
-        if let lastMessage = displayedMessages.last {
-            withAnimation {
-                scrollPosition = lastMessage.id
-            }
-        }
-    }
-    
-    private func sendMessage() {
-        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
-        let newMessage = ChatMessage(
-            id: UUID().uuidString,
-            message: messageText,
-            type: "text",
-            sender: "user",
-            timestamp: Int64(Date().timeIntervalSince1970 * 1000)
-        )
-        
-        modelContext.insert(newMessage)
-        messageText = ""
+    private func handleSendMessage() {
+        viewModel.sendTextMessage()
         isInputFocused = false
         
-        // Scroll to the new message after a brief delay to ensure it's rendered
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            scrollToBottom()
-        }
-    }
-    
-    private func loadPhotoData(from item: PhotosPickerItem) {
-        Task {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                await MainActor.run {
-                    sendImageMessage(image: image)
-                    selectedPhoto = nil
-                }
-            }
-        }
-    }
-    
-    private func sendImageMessage(image: UIImage) {
-        Task {
-            let fileName = "\(UUID().uuidString).jpg"
-
-            if let imageURL = await ImageLoader.shared.saveImage(image, fileName: fileName) {
-                
-                let fileSize = ImageLoader.shared.getFileSize(at: imageURL.path) ?? 0
-                
-                let newMessage = ChatMessage(
-                    id: UUID().uuidString,
-                    message: "Image attachment",
-                    type: "file",
-                    filePath: imageURL.path,
-                    fileSize: fileSize,
-                    sender: "user",
-                    timestamp: Int64(Date().timeIntervalSince1970 * 1000)
-                )
-
-                // Back on main actor for SwiftData + UI
-                await MainActor.run {
-                    modelContext.insert(newMessage)
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        scrollToBottom()
-                    }
-                }
-            }
-        }
-    }
-    
-    private func getFileSize(url: URL) -> Int {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let fileSize = attributes[.size] as? Int else { return 0 }
-        return fileSize
-    }
-    
-    private func loadSeedData() {
-        let seedMessages = viewModel.getSeedMessages()
-        for message in seedMessages {
-            modelContext.insert(message)
+            viewModel.scrollToBottom(lastMessageId: displayedMessages.last?.id)
         }
     }
 }

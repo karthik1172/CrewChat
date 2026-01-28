@@ -20,11 +20,6 @@ struct FullScreenImageOverlay: View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isPresented = false
-                    }
-                }
             
             // Show loading indicator briefly while image renders
             if !imageLoaded {
@@ -82,7 +77,7 @@ struct FullScreenImageOverlay: View {
                 }) {
                     Image(systemName: "xmark")
                         .foregroundStyle(.gray)
-                        .frame(width: 20, height: 20)
+//                        .frame(width: 15, height: 25)
                 }
             }
         }
