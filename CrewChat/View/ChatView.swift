@@ -194,6 +194,7 @@ struct ChatView: View {
         .geometryGroup()
         .padding(.bottom, animatedKeyBoardHeight)
         .animation(properties.animation, value: animatedKeyBoardHeight)
+        /// extracting keyboard height
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { info in
             if let frame = info.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue {
                 let height = frame.cgRectValue.height

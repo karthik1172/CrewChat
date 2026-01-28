@@ -34,21 +34,6 @@ struct FullScreenImageOverlay: View {
             }
             
             VStack {
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isPresented = false
-                        }
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .padding()
-                            .contentShape(Rectangle())
-                    }
-                }
-                
                 Spacer()
                 
                 Image(uiImage: image)
@@ -86,6 +71,19 @@ struct FullScreenImageOverlay: View {
                 
                 Spacer()
                 Spacer()
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isPresented = false
+                    }
+                }) {
+                    Image(systemName: "xmark")
+                        .foregroundStyle(.gray)
+                        .frame(width: 20, height: 20)
+                }
             }
         }
         .navigationBarBackButtonHidden(true)
