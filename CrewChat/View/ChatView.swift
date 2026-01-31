@@ -72,44 +72,7 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 
                 if isSearching {
-                    HStack {
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                            
-                            TextField("Search..", text: $searchText)
-                                .textFieldStyle(.roundedBorder)
-                                .autocorrectionDisabled()
-                                .textInputAutocapitalization(.never)
-                        }
-                        Spacer()
-                        HStack {
-                            Button {
-                                onPrevious()
-                            }
-                            label:  {
-                                Image(systemName: "chevron.up")
-                            }
-                            
-                            Button {
-                                onNext()
-                            }
-                            label:  {
-                                Image(systemName: "chevron.down")
-                            }
-                        }
-                        Button {
-                            withAnimation {
-                                isSearching.toggle()
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                        }
-                        
-                    }
-                    .padding(.all, 18)
-                    .onChange(of: searchText) { oldValue, newValue in
-                        performSearch(searchText: newValue )
-                    }
+                    SearchBar()
                 }
                 
                 // Messages List
@@ -123,6 +86,7 @@ struct ChatView: View {
                         ForEach(Array(displayedMessages.enumerated()), id: \.element.id) { index, message in
                             MessageBubbleView(
                                 chatMessage: message,
+                                searchText: searchText,
                                 onImageTap: { imagePath in
                                     loadImageForFullScreen(path: imagePath)
                                 }
@@ -168,15 +132,12 @@ struct ChatView: View {
                 .zIndex(999)
             }
         }
-//        .toolbar {
-//            ToolbarItem(placement: .topBarTrailing) {
-//                
-//            }
-//        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    isSearching.toggle()
+                    withAnimation {
+                        isSearching.toggle()
+                    }
                 }
                 label: {
                     Image(systemName: "magnifyingglass")
@@ -289,6 +250,54 @@ struct ChatView: View {
         }
     }
 
+    @ViewBuilder
+    func SearchBar() -> some View {
+        HStack {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                
+                TextField("Search..", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+            }
+            Spacer()
+            HStack {
+                Button {
+                    onPrevious()
+                }
+                label:  {
+                    Image(systemName: "chevron.up")
+                }
+                
+                Button {
+                    onNext()
+                }
+                label:  {
+                    Image(systemName: "chevron.down")
+                }
+            }
+            Button {
+                withAnimation {
+                    isSearching.toggle()
+                    searchText = ""
+                }
+            } label: {
+                Image(systemName: "x.circle.fill")
+            }
+            
+        }
+        .padding(.all, 18)
+        .onChange(of: searchText) { oldValue, newValue in
+            performSearch(searchText: newValue )
+        }
+        VStack {
+            Divider()
+                .frame(maxWidth: .infinity)
+                .frame(height: 5)
+        }
+    }
+    
     var animatedKeyBoardHeight: CGFloat {
         (properties.showPhotoPicker || isInputFocused) ? properties.keyBoardHeight : 0
     }
