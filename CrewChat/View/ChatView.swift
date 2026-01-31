@@ -51,6 +51,13 @@ struct ChatView: View {
     @State private var isLoadingMore = false
     @State private var isInitialLoad = true
     @State private var scrollPosition: String?
+    
+    // Search
+    @State private var isSearching: Bool = false
+    @State private var searchText = ""
+    @State private var searchReasult: [String] = []
+    @State private var currentIndex = 0
+    
 
     private var displayedMessages: [ChatMessage] {
         Array(allMessages.suffix(displayedMessageCount))
@@ -63,6 +70,48 @@ struct ChatView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
+                
+                if isSearching {
+                    HStack {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                            
+                            TextField("Search..", text: $searchText)
+                                .textFieldStyle(.roundedBorder)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                        }
+                        Spacer()
+                        HStack {
+                            Button {
+                                onPrevious()
+                            }
+                            label:  {
+                                Image(systemName: "chevron.up")
+                            }
+                            
+                            Button {
+                                onNext()
+                            }
+                            label:  {
+                                Image(systemName: "chevron.down")
+                            }
+                        }
+                        Button {
+                            withAnimation {
+                                isSearching.toggle()
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        
+                    }
+                    .padding(.all, 18)
+                    .onChange(of: searchText) { oldValue, newValue in
+                        performSearch(searchText: newValue )
+                    }
+                }
+                
                 // Messages List
                 ScrollView {
                     LazyVStack(spacing: 12) {
@@ -106,6 +155,7 @@ struct ChatView: View {
                     BottomBar()
                 }
             }
+            
             .ignoresSafeArea(.keyboard, edges: .all)
 
             // Full screen image overlay
@@ -116,6 +166,21 @@ struct ChatView: View {
                 ))
                 .transition(.opacity)
                 .zIndex(999)
+            }
+        }
+//        .toolbar {
+//            ToolbarItem(placement: .topBarTrailing) {
+//                
+//            }
+//        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isSearching.toggle()
+                }
+                label: {
+                    Image(systemName: "magnifyingglass")
+                }
             }
         }
         .navigationTitle("Chat")
@@ -339,6 +404,47 @@ struct ChatView: View {
         for message in seedMessages {
             modelContext.insert(message)
         }
+    }
+    
+    private func performSearch(searchText: String) {
+        guard !searchText.isEmpty else {
+            searchReasult = []
+            currentIndex = 0
+            return
+        }
+        searchReasult = displayedMessages
+            .filter { $0.type == "text" }
+            .filter { $0.message.localizedCaseInsensitiveContains(searchText)}
+            .map {$0.id}
+        currentIndex = 0
+        
+        scrollToCurrentSearchIndex()
+    }
+    
+    private func scrollToCurrentSearchIndex() {
+        guard !searchReasult.isEmpty else { return }
+        
+        let targetIndex = searchReasult[currentIndex]
+        
+        withAnimation {
+            scrollPosition = targetIndex
+        }
+    }
+    
+    private func onNext() {
+        guard !searchReasult.isEmpty else {
+            return
+        }
+        currentIndex = (currentIndex + 1) % searchReasult.count
+        scrollToCurrentSearchIndex()
+    }
+    
+    private func onPrevious() {
+        guard !searchReasult.isEmpty else {
+            return
+        }
+        currentIndex = (currentIndex - 1 + searchReasult.count) % searchReasult.count
+        scrollToCurrentSearchIndex()
     }
 }
 
