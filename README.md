@@ -91,3 +91,7 @@ Long press to Copy
 
 Full working demo youtube link: 
 https://youtube.com/shorts/pALs7wgrlJo?feature=share
+
+Search functionality implementation demo link:
+https://youtube.com/shorts/Wx7_7q5Obls?feature=share
+
